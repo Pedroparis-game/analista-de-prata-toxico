@@ -2,19 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Skull, Send, Trophy, Trash2, ShieldAlert, Gamepad2, LogIn, LogOut, UserPlus, Mail, Lock, User, Search, Activity, Languages, Zap, Brain, Target, Shield, AlertTriangle, RotateCcw } from 'lucide-react';
 import { generateRoast, analyzeProfile, analyzeMatch, chatWithAnalista, translateAppState } from './lib/gemini';
-import { supabase } from './lib/supabase';
 import { translations, Language } from './lib/translations';
 import axios from 'axios';
 import Markdown from 'react-markdown';
-
-interface ShameEntry {
-  id: string;
-  user_id: string;
-  user_input: string;
-  bot_response: string;
-  created_at: string;
-  user_email?: string;
-}
 
 interface PlayerStats {
   name: string;
@@ -45,7 +35,6 @@ export default function App() {
   const [showApp, setShowApp] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mural, setMural] = useState<ShameEntry[]>([]);
   const [lastRoast, setLastRoast] = useState<string | null>(null);
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
   const [player, setPlayer] = useState<PlayerStats | null>(null);
@@ -56,10 +45,7 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [profileAnalysis, setProfileAnalysis] = useState<ProfileAnalysisResult | null>(null);
-  const [topBagres, setTopBagres] = useState<ShameEntry[]>([]);
   const [triggerShake, setTriggerShake] = useState(false);
-  const [isPosted, setIsPosted] = useState(false);
-  const [currentRoastData, setCurrentRoastData] = useState<{ input: string, roast: string } | null>(null);
   const [showAnalysisScreen, setShowAnalysisScreen] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
 
@@ -71,9 +57,6 @@ export default function App() {
     if (selectedMatch && selectedMatch.analysis) stateToTranslate.matchAnalysis = selectedMatch.analysis;
     if (profileAnalysis) stateToTranslate.profileAnalysis = profileAnalysis;
     if (chatMessages.length > 0) stateToTranslate.chatMessages = chatMessages;
-    if (mural.length > 0) {
-      stateToTranslate.mural = mural.map(m => ({ id: m.id, bot_response: m.bot_response }));
-    }
     
     setLanguage(newLang);
 
@@ -95,12 +78,6 @@ export default function App() {
         }
         if (translated.profileAnalysis) setProfileAnalysis(translated.profileAnalysis);
         if (translated.chatMessages) setChatMessages(translated.chatMessages);
-        if (translated.mural) {
-          setMural(prev => prev.map(m => {
-            const t = translated.mural.find((x: any) => x.id === m.id);
-            return t ? { ...m, bot_response: t.bot_response } : m;
-          }));
-        }
       }
       
       setLoading(false);
@@ -116,10 +93,6 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchMural();
-  }, [supabase]);
-
   // Re-analyze when language changes (with debounce)
   useEffect(() => {
     if (player && showApp && !analyzing) {
@@ -133,45 +106,6 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [language, player?.name, player?.tag]);
-
-  const fetchMural = async () => {
-    if (!supabase) return;
-    
-    try {
-      // Normal mural (recent 10)
-      const { data: muralData, error: muralError } = await supabase
-        .from('hall_of_shame')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
-      
-      if (muralError) {
-        if (muralError.code !== 'PGRST125' && muralError.code !== '404') {
-          console.error("Error fetching mural:", muralError);
-        }
-      } else if (muralData) {
-        setMural(muralData as ShameEntry[]);
-        setSupabaseError(null);
-      }
-
-      // Top Bagres (most recent unique entries for leaderboard feel)
-      const { data: topData, error: topError } = await supabase
-        .from('hall_of_shame')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (topError) {
-        if (topError.code !== 'PGRST125' && topError.code !== '404') {
-          console.error("Error fetching top bagres:", topError);
-        }
-      } else if (topData) {
-        setTopBagres(topData as ShameEntry[]);
-      }
-    } catch (err) {
-      console.error("Network or unexpected error fetching mural:", err);
-    }
-  };
 
   const startAnalysisAnimation = () => {
     setAnalysisProgress(0);
@@ -313,44 +247,14 @@ export default function App() {
     setLoading(true);
     setLastRoast(null);
     setSupabaseError(null);
-    setIsPosted(false);
 
     const roast = await generateRoast(input, player, language);
     setLastRoast(roast);
-    setCurrentRoastData({ input, roast });
     setTriggerShake(true);
     setTimeout(() => setTriggerShake(false), 500);
 
     setLoading(false);
     setInput('');
-  };
-
-  const handlePostToMural = async () => {
-    if (!supabase || !currentRoastData || isPosted) return;
-    
-    setLoading(true);
-    try {
-      const { error } = await supabase.from('hall_of_shame').insert([
-        {
-          user_id: player ? `${player.name}#${player.tag}` : 'web_user',
-          user_email: player ? `${player.name}#${player.tag} (${player.rank || 'BRONZE SOUL'})` : 'Anonymous',
-          user_input: currentRoastData.input,
-          bot_response: currentRoastData.roast
-        }
-      ]);
-
-      if (error) {
-        console.error("Error saving to mural:", error);
-        setSupabaseError(`Save failed: ${error.message}`);
-      } else {
-        setIsPosted(true);
-        fetchMural();
-      }
-    } catch (err: any) {
-      console.error("Network or unexpected error saving to mural:", err);
-      setSupabaseError(`Save failed: ${err.message || 'Network error'}`);
-    }
-    setLoading(false);
   };
 
   return (
@@ -944,49 +848,16 @@ export default function App() {
                           </div>
 
                           <div className="mt-8 flex flex-col gap-3">
-                            <button
-                              onClick={handlePostToMural}
-                              disabled={isPosted || loading}
-                              className={`w-full py-3 font-display text-sm uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 skew-x-[-10deg] ${
-                                isPosted 
-                                ? 'bg-gray-800 text-gray-400 border-gray-700 cursor-default grayscale' 
-                                : 'bg-[#ece8e1] text-[#0f1923] hover:bg-[#ff4655] hover:text-white border-[#0f1923] hover:border-white border-2'
-                              }`}
-                            >
-                            {isPosted ? (
-                              <>
-                                <ShieldAlert size={18} className="skew-x-[10deg]" />
-                                <span className="skew-x-[10deg]">{t.dashboard.archived}</span>
-                              </>
-                            ) : (
-                              <>
-                                <UserPlus size={18} className="skew-x-[10deg]" />
-                                <span className="skew-x-[10deg]">{t.dashboard.eternize}</span>
-                              </>
-                            )}
-                          </button>
-
                           <button
                             onClick={() => {
                               setLastRoast(null);
                               setInput('');
-                              setIsPosted(false);
                             }}
                             className="w-full py-3 font-display text-sm uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 skew-x-[-10deg] bg-transparent border-2 border-white/20 text-white/60 hover:border-[#ff4655] hover:text-[#ff4655]"
                           >
                             <RotateCcw size={18} className="skew-x-[10deg]" />
                             <span className="skew-x-[10deg]">{t.dashboard.reset}</span>
                           </button>
-
-                          {isPosted && (
-                            <div className="flex items-center justify-center gap-2 opacity-50">
-                              <div className="h-[1px] flex-1 bg-white/20"></div>
-                              <p className="font-mono text-[9px] uppercase tracking-tighter">
-                                {t.dashboard.successPost}
-                              </p>
-                              <div className="h-[1px] flex-1 bg-white/20"></div>
-                            </div>
-                          )}
                           </div>
                         </div>
                       </div>
@@ -1153,103 +1024,6 @@ export default function App() {
                 </button>
               </form>
             </div>
-          </div>
-        </div>
-
-        {/* Mural & Ranking Section */}
-        <div className="pt-10 md:pt-20 space-y-8 md:space-y-16">
-          <div className="flex items-center gap-4 md:gap-6">
-            <h2 className="font-display text-3xl md:text-5xl uppercase italic tracking-tighter shrink-0 text-[#ff4655]">{t.mural.title}</h2>
-            <div className="h-[1px] md:h-[2px] w-full bg-[#ece8e1]/10"></div>
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-8 md:gap-16">
-            {/* Top Bagres (Ranking) */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="lg:col-span-1 val-border p-6 md:p-10 bg-[#1f2933] text-[#ece8e1] relative shadow-[inset_0_0_50px_rgba(0,0,0,0.5)]"
-            >
-              <div className="absolute -top-2 left-0 w-full flex justify-center items-center z-20 px-6 md:px-10">
-                <div className="val-header !bg-[#ffb800] !text-[#0f1923] !py-2 md:!py-3 text-base md:text-xl w-full flex justify-center items-center">
-                  <div className="flex items-center gap-3">
-                    <Trophy size={16} className="md:w-5 md:h-5" /> <span className="translate-y-[1px]">{t.mural.elite}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 md:space-y-6 mt-10">
-                {topBagres.map((entry, idx) => (
-                  <motion.div
-                    key={entry.id}
-                    initial={{ scale: 0.95, opacity: 0 }}
-                    whileInView={{ scale: 1, opacity: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.1 }}
-                    className={`flex items-center gap-3 md:gap-5 p-3 md:p-4 val-border ${idx === 0 ? 'bg-[#ffb800] border-black text-[#0f1923]' : 'bg-[#0f1923] opacity-80 hover:opacity-100 transition-opacity'}`}
-                  >
-                    <span className="font-display text-2xl md:text-4xl italic opacity-50 w-8 md:w-12 text-center">0{idx + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-display text-base md:text-lg uppercase tracking-tight truncate">
-                        {entry.user_id || t.dashboard.hiddenRequest}
-                      </p>
-                      <p className="text-[8px] md:text-[10px] font-mono opacity-60 font-bold uppercase">
-                        {entry.user_email?.match(/\(([^)]+)\)/)?.[1] || t.dashboard.noobTraining}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
-                {topBagres.length === 0 && (
-                  <div className="py-10 md:py-20 text-center opacity-10">
-                    <Search size={32} className="mx-auto mb-4 md:w-12 md:h-12" />
-                    <p className="font-mono text-[10px] uppercase tracking-widest">{t.mural.searching}</p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Mural da Vergonha Mundial */}
-            <motion.div
-              initial={{ opacity: 0, y: 50 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="lg:col-span-2 val-border p-6 md:p-12 bg-[#0f1923] border-[#ff4655]/30 relative min-h-[300px] md:min-h-[400px]"
-            >
-              <div className="absolute -top-2 left-0 w-full flex justify-center items-center z-20 px-6 md:px-12">
-                <div className="val-header !tracking-[0.2em] !py-3 md:!py-4 text-[10px] md:text-base w-full flex justify-center items-center text-center">
-                  <div>{t.dashboard.registry}</div>
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4 md:gap-8 mt-10">
-                {mural.map((entry, idx) => (
-                  <motion.div
-                    key={entry.id}
-                    initial={{ opacity: 0 }}
-                    whileInView={{ opacity: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.05 }}
-                    className="p-4 md:p-6 border border-[#ece8e1]/10 hover:border-[#ff4655]/50 transition-all bg-[#1f2933]/50 group"
-                  >
-                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#ece8e1]/5">
-                      <span className="text-[8px] md:text-[9px] font-mono text-[#ff4655] font-bold uppercase tracking-widest">
-                        {entry.user_email?.split('(')[0] || t.dashboard.anonymous}
-                      </span>
-                      <span className="text-[7px] md:text-[8px] font-mono opacity-30">
-                        // {new Date(entry.created_at).toLocaleDateString(language === 'pt' ? 'pt-BR' : 'en-US')}
-                      </span>
-                    </div>
-                    <p className="text-[10px] md:text-xs font-mono text-[#ece8e1]/60 mb-3 italic line-clamp-2">
-                      "{entry.user_input}"
-                    </p>
-                    <div className="text-[#ece8e1] text-xs md:text-sm font-sans leading-relaxed group-hover:text-[#ff4655] transition-colors markdown-body">
-                      <Markdown>{entry.bot_response}</Markdown>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
           </div>
         </div>
       </main>

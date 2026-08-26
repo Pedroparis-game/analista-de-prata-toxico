@@ -91,25 +91,44 @@ ${structLimit}
     }
 
     console.log("Calling Gemini API for Roast...");
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: finalPrompt,
-      config: {
-        systemInstruction: getSystemInstruction(lang) + `\n\nIMPORTANT: ALWAYS FOLLOW THE 3-BULLET VOD REVIEW FORMAT. YOUR RESPONSE MUST BE STRICTLY IN ${lang === 'pt' ? 'PORTUGUESE (PT-BR)' : 'ENGLISH'}.`,
-        temperature: 1.0,
-      },
-    });
+    let response;
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        response = await ai.models.generateContent({
+          model: "gemini-3.1-flash-lite",
+          contents: finalPrompt,
+          config: {
+            systemInstruction: getSystemInstruction(lang) + `\n\nIMPORTANT: ALWAYS FOLLOW THE 3-BULLET VOD REVIEW FORMAT. YOUR RESPONSE MUST BE STRICTLY IN ${lang === 'pt' ? 'PORTUGUESE (PT-BR)' : 'ENGLISH'}.`,
+            temperature: 1.0,
+          },
+        });
+        break;
+      } catch (err: any) {
+        if ((err.status === 503 || err.message?.includes('503')) && retries > 1) {
+          console.warn("Gemini 503 error, retrying in 2s...");
+          await new Promise(r => setTimeout(r, 2000));
+          retries--;
+        } else {
+          throw err;
+        }
+      }
+    }
 
-    if (!response.text) {
+    if (!response?.text) {
       throw new Error("Empty response from Gemini API");
     }
 
     return response.text;
   } catch (error: any) {
     console.error('GEMINI API ERROR (generateRoast):', error);
+    let errMsg = error.message || 'Unknown Error';
+    if (errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE')) {
+      return lang === 'pt' ? 'Servidor do Gemini sobrecarregado no momento (Erro 503). Tente novamente em instantes.' : 'Gemini servers are overloaded (Error 503). Try again later.';
+    }
     return lang === 'pt' 
-      ? `Erro: ${error.message}. Parabéns, você quebrou a IA com sua ruindade.` 
-      : `Error: ${error.message}. Congratulations, you broke the AI with your badness.`;
+      ? `Erro: ${errMsg}. Parabéns, você quebrou a IA com sua ruindade.` 
+      : `Error: ${errMsg}. Congratulations, you broke the AI with your badness.`;
   }
 }
 
@@ -135,42 +154,57 @@ Name: ${stats.name}#${stats.tag}
 Rank: ${stats.rank}
 Recent Match Summaries: ${JSON.stringify(matchSummaries)}`;
 
-    console.log(`Calling Gemini API for Profile Analysis in ${lang}...`);
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: prompt + `\n\n(IMPORTANT: RESPOND EVERYTHING IN ${lang === 'pt' ? 'PORTUGUESE' : 'ENGLISH'})`,
-      config: { 
-        systemInstruction: getSystemInstruction(lang) + `\n\nIMPORTANT: YOU ARE A DEEP SCOUTING SYSTEM. PROVIDE A STRUCTURED ANALYSIS. RESPOND ONLY IN ${lang === 'pt' ? 'PORTUGUESE (PT-BR)' : 'ENGLISH'}.`, 
-        temperature: 0.9,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            archetype: {
+    let response;
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        console.log(`Calling Gemini API for Profile Analysis in ${lang}... (Attempts left: ${retries})`);
+        response = await ai.models.generateContent({
+          model: "gemini-3.1-flash-lite",
+          contents: prompt + `\n\n(IMPORTANT: RESPOND EVERYTHING IN ${lang === 'pt' ? 'PORTUGUESE' : 'ENGLISH'})`,
+          config: { 
+            systemInstruction: getSystemInstruction(lang) + `\n\nIMPORTANT: YOU ARE A DEEP SCOUTING SYSTEM. PROVIDE A STRUCTURED ANALYSIS. RESPOND ONLY IN ${lang === 'pt' ? 'PORTUGUESE (PT-BR)' : 'ENGLISH'}.`, 
+            temperature: 0.9,
+            responseMimeType: "application/json",
+            responseSchema: {
               type: Type.OBJECT,
               properties: {
-                title: { type: Type.STRING },
-                description: { type: Type.STRING }
+                archetype: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING }
+                  },
+                  required: ["title", "description"]
+                },
+                scoutingReport: {
+                  type: Type.OBJECT,
+                  properties: {
+                    rankLevel: { type: Type.STRING },
+                    mechanical: { type: Type.STRING },
+                    mental: { type: Type.STRING }
+                  },
+                  required: ["rankLevel", "mechanical", "mental"]
+                },
+                crushingSummary: { type: Type.STRING }
               },
-              required: ["title", "description"]
-            },
-            scoutingReport: {
-              type: Type.OBJECT,
-              properties: {
-                rankLevel: { type: Type.STRING },
-                mechanical: { type: Type.STRING },
-                mental: { type: Type.STRING }
-              },
-              required: ["rankLevel", "mechanical", "mental"]
-            },
-            crushingSummary: { type: Type.STRING }
+              required: ["archetype", "scoutingReport", "crushingSummary"]
+            }
           },
-          required: ["archetype", "scoutingReport", "crushingSummary"]
+        });
+        break; // Success, exit retry loop
+      } catch (err: any) {
+        if ((err.status === 503 || err.message?.includes('503')) && retries > 1) {
+          console.warn("Gemini 503 error, retrying in 2s...");
+          await new Promise(r => setTimeout(r, 2000));
+          retries--;
+        } else {
+          throw err;
         }
-      },
-    });
+      }
+    }
 
-    const text = response.text;
+    const text = response?.text;
     if (!text) {
       throw new Error("Gemini returned an empty response.");
     }
@@ -189,6 +223,11 @@ Recent Match Summaries: ${JSON.stringify(matchSummaries)}`;
   } catch (error: any) {
     console.error('GEMINI API ERROR (analyzeProfile):', error);
     
+    let errMsg = error.message || 'Unknown Error';
+    if (errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE')) {
+      errMsg = lang === 'pt' ? 'O SERVIDOR DO GEMINI ESTÁ SOBRECARREGADO (ERRO 503). TENTE NOVAMENTE EM ALGUNS INSTANTES.' : 'GEMINI SERVERS ARE CURRENTLY OVERLOADED (ERROR 503). PLEASE TRY AGAIN SHORTLY.';
+    }
+
     const isQuotaError = error.message?.includes('RESOURCE_EXHAUSTED') || error.status === 429;
     const quotaMsg = lang === 'pt' 
       ? "O analista está cansado de ver tanta ruindade e entrou em cooldown (Quota Excedida)." 
@@ -198,7 +237,7 @@ Recent Match Summaries: ${JSON.stringify(matchSummaries)}`;
       ...fallback,
       archetype: { 
         ...fallback.archetype, 
-        description: isQuotaError ? quotaMsg : `Failure: ${error.message || 'Unknown Error'}. Your data is so bad it broke the scouting module.` 
+        description: isQuotaError ? quotaMsg : `Failure: ${errMsg}` 
       }
     };
   }
@@ -215,7 +254,7 @@ export async function analyzeMatch(match: any, playerStats: any, lang: string = 
     
     console.log(`Calling Gemini API for Match Analysis in ${lang}...`);
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-3.1-flash-lite",
       contents: prompt + `\n\n(IMPORTANT: RESPOND EVERYTHING IN ${lang === 'pt' ? 'PORTUGUESE' : 'ENGLISH'})`,
       config: { 
         systemInstruction: getSystemInstruction(lang) + `\n\nIMPORTANT: PROVIDE A DETAILED AND TOXIC MATCH RECAP. RESPOND ONLY IN ${lang === 'pt' ? 'PORTUGUESE (PT-BR)' : 'ENGLISH'}.`, 
@@ -243,7 +282,7 @@ export async function chatWithAnalista(history: any[], newMessage: string, stats
 
     console.log(`Calling Gemini API for Chat in ${lang}...`);
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-3.1-flash-lite",
       contents: contents,
       config: { 
         systemInstruction: getSystemInstruction(lang) + `\n\nUser Context: ${stats.name}#${stats.tag}, Rank ${stats.rank}. IMPORTANT: RESPOND ONLY IN ${lang === 'pt' ? 'PORTUGUESE (PT-BR)' : 'ENGLISH'}.`,
@@ -268,7 +307,7 @@ JSON to translate:
 ${JSON.stringify(stateObj)}`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
+      model: "gemini-3.1-flash-lite",
       contents: prompt,
       config: {
         temperature: 0.1,
