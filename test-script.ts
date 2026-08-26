@@ -1,1 +1,1 @@
-console.log("Translation logic implemented!");
+console.log("ok")
