@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Skull, Send, Trophy, Trash2, ShieldAlert, Gamepad2, LogIn, LogOut, UserPlus, Mail, Lock, User, Search, Activity, Languages, Zap, Brain, Target, Shield, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Skull, Send, Trophy, Trash2, ShieldAlert, Gamepad2, LogIn, LogOut, UserPlus, Mail, Lock, User, Search, Activity, Languages, Zap, Brain, Target, Shield, AlertTriangle, RotateCcw, Terminal, Loader2 } from 'lucide-react';
 import { generateRoast, analyzeProfile, analyzeMatch, chatWithAnalista, translateAppState } from './lib/gemini';
 import { translations, Language } from './lib/translations';
 import axios from 'axios';
@@ -47,7 +47,11 @@ export default function App() {
   const [profileAnalysis, setProfileAnalysis] = useState<ProfileAnalysisResult | null>(null);
   const [triggerShake, setTriggerShake] = useState(false);
   const [showAnalysisScreen, setShowAnalysisScreen] = useState(false);
+  const [gtaWasted, setGtaWasted] = useState(false);
+  const [loginSuccessAnim, setLoginSuccessAnim] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [modalContent, setModalContent] = useState<'guidelines' | 'privacy' | null>(null);
+  const [agentData, setAgentData] = useState<{ portrait: string, background: string } | null>(null);
 
   const handleLanguageChange = async (newLang: Language) => {
     if (newLang === language) return;
@@ -69,9 +73,6 @@ export default function App() {
       if (translated) {
         if (translated.lastRoast) {
           setLastRoast(translated.lastRoast);
-          if (currentRoastData) {
-            setCurrentRoastData({ ...currentRoastData, roast: translated.lastRoast });
-          }
         }
         if (translated.matchAnalysis && selectedMatch) {
           setSelectedMatch({...selectedMatch, analysis: translated.matchAnalysis});
@@ -163,17 +164,33 @@ export default function App() {
         matches
       };
 
-      setPlayer(stats);
-      localStorage.setItem('valorant_player', JSON.stringify(stats));
       setSupabaseError(null);
-      setShowAnalysisScreen(true);
-      startAnalysisAnimation();
-
-      // Auto-analyze profile
-      setAnalyzing(true);
-      const analysis = await analyzeProfile(stats, language);
-      setProfileAnalysis(analysis);
-      setAnalyzing(false);
+      setLoginSuccessAnim(true);
+      
+      setTimeout(async () => {
+        setLoginSuccessAnim(false);
+        setPlayer(stats);
+        try {
+          localStorage.setItem('valorant_player', JSON.stringify(stats));
+        } catch (storageErr) {
+          console.warn("Storage quota exceeded, storing light profile without matches");
+          try {
+            const lightStats = { ...stats, matches: [] };
+            localStorage.setItem('valorant_player', JSON.stringify(lightStats));
+          } catch (e) {
+            console.error("Could not store player data", e);
+          }
+        }
+        setShowAnalysisScreen(true);
+        startAnalysisAnimation();
+        
+        // Auto-analyze profile
+        setAnalyzing(true);
+        const analysis = await analyzeProfile(stats, language);
+        setProfileAnalysis(analysis);
+        setAnalyzing(false);
+        setAuthLoading(false);
+      }, 1200);
     } catch (error: any) {
       const isNotFound = error.response?.status === 404;
       
@@ -181,30 +198,17 @@ export default function App() {
         console.error("Critical error fetching stats:", error);
       }
       
-      const fallbackStats: PlayerStats = {
-        name,
-        tag,
-        level: null,
-        rank: null,
-        mmr: null
-      };
-      setPlayer(fallbackStats);
-      localStorage.setItem('valorant_player', JSON.stringify(fallbackStats));
-      setShowAnalysisScreen(true);
-      startAnalysisAnimation();
-      
-      setAnalyzing(true);
-      const analysis = await analyzeProfile(fallbackStats, language);
-      setProfileAnalysis(analysis);
-      setAnalyzing(false);
-
       if (isNotFound) {
+        setGtaWasted(true);
         setSupabaseError(t.login.errorNotFound);
+        setTimeout(() => {
+          setGtaWasted(false);
+          setAuthLoading(false);
+        }, 5000);
       } else {
         setSupabaseError(t.login.errorUnstable);
+        setAuthLoading(false);
       }
-    } finally {
-      setAuthLoading(false);
     }
   };
 
@@ -221,6 +225,22 @@ export default function App() {
     if (!player) return;
     setAnalyzing(true);
     setSelectedMatch({ ...match, analysis: t.match.analyzing });
+    setAgentData(null);
+
+    const stats = match.players?.all_players?.find((p: any) => p.name === player.name);
+    if (stats?.character) {
+      try {
+        const res = await fetch('https://valorant-api.com/v1/agents?isPlayableCharacter=true');
+        const data = await res.json();
+        const agent = data.data.find((a: any) => a.displayName.toLowerCase() === stats.character.toLowerCase());
+        if (agent) {
+          setAgentData({ portrait: agent.fullPortrait, background: agent.background });
+        }
+      } catch (e) {
+        console.error('Error fetching agent data', e);
+      }
+    }
+
     const analysis = await analyzeMatch(match, player, language);
     setSelectedMatch({ ...match, analysis });
     setAnalyzing(false);
@@ -318,6 +338,71 @@ export default function App() {
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#ff4655] opacity-[0.03] rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2" />
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#00b2a9] opacity-[0.02] rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2" />
         
+        {/* GTA WASTED ANIMATION OVERLAY */}
+        <AnimatePresence>
+          {gtaWasted && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+              style={{ backdropFilter: 'grayscale(100%) contrast(120%) brightness(60%)' }}
+            >
+              <motion.div
+                initial={{ scale: 2, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="text-center"
+              >
+                <h2 className="font-display text-5xl md:text-8xl text-[#ff4655] uppercase tracking-[0.2em] drop-shadow-[0_0_20px_rgba(255,70,85,0.8)] [text-shadow:4px_4px_0_#000]">
+                  {language === 'pt' ? 'JOGADOR NÃO ENCONTRADO' : 'PLAYER NOT FOUND'}
+                </h2>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* VALORANT SLIDE / PEEL TRANSITION */}
+        <AnimatePresence>
+          {loginSuccessAnim && (
+            <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
+              {/* Red accent wipe */}
+              <motion.div
+                className="absolute inset-0 bg-[#ff4655]"
+                initial={{ x: '-100%' }}
+                animate={{ x: '0%' }}
+                exit={{ x: '100%' }}
+                transition={{ duration: 0.5, ease: [0.76, 0, 0.24, 1] }}
+              />
+              {/* Main dark wipe */}
+              <motion.div
+                className="absolute inset-0 bg-[#0f1923] flex items-center justify-center"
+                initial={{ x: '-100%' }}
+                animate={{ x: '0%' }}
+                exit={{ x: '100%' }}
+                transition={{ duration: 0.5, delay: 0.1, ease: [0.76, 0, 0.24, 1] }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.1 }}
+                  transition={{ duration: 0.3, delay: 0.4 }}
+                  className="flex flex-col items-center gap-6"
+                >
+                  <div className="flex gap-2 items-center">
+                     <div className="w-6 h-16 bg-[#ff4655] transform -skew-x-12" />
+                     <div className="w-4 h-16 bg-[#ff4655] transform -skew-x-12 opacity-50" />
+                     <div className="w-2 h-16 bg-[#ff4655] transform -skew-x-12 opacity-20" />
+                  </div>
+                  <h2 className="font-display text-4xl text-white uppercase tracking-[0.2em] italic">
+                    {language === 'pt' ? 'CARREGANDO' : 'LOADING'}
+                  </h2>
+                </motion.div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -661,69 +746,71 @@ export default function App() {
       <main className="flex-1 container mx-auto px-4 py-8 md:py-16 space-y-8 md:space-y-16 max-w-7xl">
         <div className="grid lg:grid-cols-2 gap-8 md:gap-16">
           {/* Left Column: Input & Profile Analysis */}
-          <div className="space-y-8 md:space-y-10">
+          <div className="space-y-8 md:space-y-10 flex flex-col">
             <motion.div 
               initial={{ opacity: 0, x: -50 }}
               animate={{ opacity: 1, x: 0 }}
-              className="val-border p-6 md:p-10 bg-[#1f2933] text-[#ece8e1] relative overflow-hidden hover-sweep"
+              className="val-border p-6 md:p-8 bg-[#1f2933] text-[#ece8e1] relative overflow-hidden hover-sweep w-full"
             >
-              <div className="absolute -top-1 left-0 w-full flex justify-center items-center z-20 px-6 md:px-10">
+              <div className="absolute -top-1 left-0 w-full flex justify-center items-center z-20 px-6 md:px-8">
                 <div className="val-header w-full flex justify-center items-center text-[10px] md:text-base">
                   <div>{t.dashboard.submission}</div>
                 </div>
               </div>
               
-              <p className="mb-4 md:mb-6 font-mono text-[10px] md:text-xs uppercase opacity-50 mt-8 tracking-widest text-center">
+              <p className="mb-4 font-mono text-[10px] md:text-xs uppercase opacity-50 mt-6 tracking-widest text-center">
                 {t.dashboard.reportPrompt}
               </p>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={t.dashboard.placeholder}
-                  className="w-full h-40 p-5 bg-[#0f1923] text-[#ece8e1] border-b-2 border-[#ff4655] focus:outline-none focus:bg-[#2a3744] transition-all font-mono placeholder:opacity-10 resize-none"
+                  className="w-full h-24 md:h-28 p-4 bg-[#0f1923] text-[#ece8e1] border-b-2 border-[#ff4655] focus:outline-none focus:bg-[#2a3744] transition-all font-mono placeholder:opacity-10 resize-none text-sm"
                 />
                 <button
                   type="submit"
                   disabled={loading}
-                  className="val-btn val-btn-primary w-full"
+                  className="val-btn val-btn-primary w-full py-3 text-lg"
                 >
                   {loading ? (
                     <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
-                      <Skull size={28} />
+                      <Skull size={24} />
                     </motion.div>
                   ) : (
                     <>
-                      <Send size={24} className="mr-4" />
+                      <Send size={20} className="mr-3" />
                       {t.dashboard.generate}
                     </>
                   )}
                 </button>
                 
-                <div className="flex items-center gap-4 pt-4">
+                <div className="flex items-center gap-4 pt-2">
                   <div className="flex-1 h-[1px] bg-white/5"></div>
                   <span className="font-mono text-[9px] uppercase opacity-20 tracking-[0.5em]">{t.dashboard.modules}</span>
                   <div className="flex-1 h-[1px] bg-white/5"></div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowAnalysisScreen(true)}
-                  className="val-btn text-xs w-full flex items-center justify-center gap-2 border-[#ece8e1]/10 text-[#ece8e1]/60 hover:text-[#ff4655] hover:border-[#ff4655]/40"
-                >
-                  <Activity size={18} />
-                  {t.dashboard.viewVerdict}
-                </button>
+                <div className="flex flex-col md:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAnalysisScreen(true)}
+                    className="val-btn text-xs w-full flex items-center justify-center gap-2 border-[#ece8e1]/10 text-[#ece8e1]/60 hover:text-[#ff4655] hover:border-[#ff4655]/40 py-2"
+                  >
+                    <Activity size={16} />
+                    {t.dashboard.viewVerdict}
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="val-btn val-btn-secondary w-full text-base"
-                >
-                  <LogOut size={18} className="mr-2" />
-                  {t.dashboard.disconnect}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="val-btn text-xs w-full flex items-center justify-center gap-2 border-[#ece8e1]/10 text-[#ece8e1]/60 hover:text-[#ff4655] hover:border-[#ff4655]/40 py-2"
+                  >
+                    <LogOut size={16} />
+                    {t.dashboard.disconnect}
+                  </button>
+                </div>
               </form>
             </motion.div>
 
@@ -878,7 +965,7 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-          {/* Right Column: Match History & Chat */}
+          {/* Right Column: Match History */}
           <div className="space-y-10">
             {/* Match History */}
             <div className="val-border p-6 md:p-10 bg-[#1f2933] text-[#ece8e1] relative">
@@ -925,50 +1012,144 @@ export default function App() {
               </div>
             </div>
 
-            {/* Selected Match Analysis */}
-            <AnimatePresence>
-              {selectedMatch && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="val-border p-8 bg-[#1f2933] border-[#ff4655]/40 text-[#ece8e1] relative overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 p-2 opacity-10">
-                    <Shield size={60} className="text-[#ff4655]" />
+          </div>
+        </div>
+
+        {/* Selected Match Analysis & Telemetry */}
+        <AnimatePresence>
+          {selectedMatch && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="grid lg:grid-cols-2 gap-8 md:gap-16"
+            >
+              {/* Left Side: Telemetry */}
+              <div className="val-border bg-[#1f2933] border-[#ff4655]/40 text-[#ece8e1] relative overflow-hidden flex flex-col h-[600px]">
+                {/* Background Agent Graphic */}
+                {agentData?.background && (
+                  <div 
+                    className="absolute inset-0 z-0 opacity-15 bg-no-repeat mix-blend-screen"
+                    style={{ 
+                      backgroundImage: `url(${agentData.background})`,
+                      backgroundSize: '100%',
+                      backgroundPosition: 'top center',
+                      WebkitMaskImage: 'linear-gradient(to bottom, white 20%, transparent 70%)',
+                      maskImage: 'linear-gradient(to bottom, white 20%, transparent 70%)'
+                    }}
+                  />
+                )}
+                <div className="absolute top-0 right-0 p-4 opacity-10 z-10 pointer-events-none">
+                  <Activity size={60} className="text-[#ff4655]" />
+                </div>
+                <div className="absolute -top-1 left-0 w-full flex justify-center items-center z-30 px-8">
+                  <div className="bg-[#0f1923] text-white py-2 font-display text-base md:text-lg skew-x-[-10deg] italic flex items-center justify-center border-l-4 border-[#ff4655] w-full uppercase shadow-[0_4px_10px_rgba(0,0,0,0.3)]">
+                    <Activity size={18} className="mr-3 text-[#ff4655]" />
+                    {language === 'pt' ? 'TELEMETRIA DA PARTIDA' : 'MATCH TELEMETRY'}
                   </div>
-                  
-                  <div className="absolute -top-1 left-0 w-full flex justify-center items-center z-20 px-8">
-                    <div className="bg-[#ff4655] text-white py-2 font-display text-base md:text-lg skew-x-[-10deg] italic flex items-center justify-center border-l-4 border-white w-full uppercase shadow-[0_4px_10px_rgba(0,0,0,0.3)]">
-                      <ShieldAlert size={18} className="mr-3" />
-                      {t.errors.details}
+                </div>
+
+                {/* Agent Portrait Inline */}
+                <div className="relative flex-1 w-full flex items-end justify-center z-10 pt-10 mb-[-10px] pointer-events-none">
+                  {agentData?.portrait && (
+                    <img 
+                      src={agentData.portrait} 
+                      alt="Agent"
+                      className="w-full max-w-[280px] h-full max-h-[350px] object-contain object-bottom drop-shadow-[0_0_15px_rgba(255,70,85,0.4)]"
+                      style={{ 
+                        WebkitMaskImage: 'linear-gradient(to bottom, white 80%, transparent 100%)',
+                        maskImage: 'linear-gradient(to bottom, white 80%, transparent 100%)'
+                      }}
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                </div>
+
+                <div className="p-8 relative z-20 space-y-4 bg-[#1f2933] shrink-0 border-t border-white/5">
+                  {(() => {
+                     const matchStats = selectedMatch.players?.all_players?.find((p: any) => p.name === player?.name);
+                     const kills = matchStats?.stats?.kills || 0;
+                     const deaths = matchStats?.stats?.deaths || 0;
+                     const assists = matchStats?.stats?.assists || 0;
+                     const kdRatio = deaths > 0 ? (kills / deaths).toFixed(2) : kills.toFixed(2);
+                     return (
+                       <>
+                         <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-black/20 p-4 border-l-2 border-white/20">
+                              <span className="font-mono text-[9px] uppercase font-bold opacity-40 block mb-1">AGENT</span>
+                              <p className="font-mono text-lg font-bold uppercase">{matchStats?.character || 'UNKNOWN'}</p>
+                            </div>
+                            <div className="bg-black/20 p-4 border-l-2 border-[#ff4655]">
+                              <span className="font-mono text-[9px] uppercase font-bold opacity-40 block mb-1">K/D RATIO</span>
+                              <p className="font-mono text-lg font-bold uppercase">{kdRatio}</p>
+                            </div>
+                         </div>
+                         <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-black/20 p-3 text-center border-b-2 border-white/10">
+                              <span className="font-mono text-[9px] uppercase font-bold opacity-40 block mb-1">KILLS</span>
+                              <p className="font-mono text-xl font-bold uppercase text-white">{kills}</p>
+                            </div>
+                            <div className="bg-black/20 p-3 text-center border-b-2 border-[#ff4655]/50">
+                              <span className="font-mono text-[9px] uppercase font-bold opacity-40 block mb-1">DEATHS</span>
+                              <p className="font-mono text-xl font-bold uppercase text-[#ff4655]">{deaths}</p>
+                            </div>
+                            <div className="bg-black/20 p-3 text-center border-b-2 border-[#00b2a9]/50">
+                              <span className="font-mono text-[9px] uppercase font-bold opacity-40 block mb-1">ASSISTS</span>
+                              <p className="font-mono text-xl font-bold uppercase text-[#00b2a9]">{assists}</p>
+                            </div>
+                         </div>
+                         <div className="bg-black/30 p-4 border border-white/10 italic relative overflow-hidden group">
+                           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent h-2 top-0 group-hover:animate-scan-fast pointer-events-none" />
+                           <span className="font-mono text-[9px] uppercase font-bold opacity-40 block mb-1">COMBAT SCORE</span>
+                           <p className="font-mono text-2xl font-bold uppercase text-white">{matchStats?.stats?.score || 0}</p>
+                         </div>
+                       </>
+                     )
+                  })()}
+                </div>
+              </div>
+
+              {/* Right Side: Analysis */}
+              <div className="val-border p-8 bg-[#1f2933] border-[#ff4655]/40 text-[#ece8e1] relative overflow-hidden flex flex-col h-[600px]">
+                <div className="absolute top-0 right-0 p-2 opacity-10">
+                  <Shield size={60} className="text-[#ff4655]" />
+                </div>
+                
+                <div className="absolute -top-1 left-0 w-full flex justify-center items-center z-20 px-8">
+                  <div className="bg-[#ff4655] text-white py-2 font-display text-base md:text-lg skew-x-[-10deg] italic flex items-center justify-center border-l-4 border-white w-full uppercase shadow-[0_4px_10px_rgba(0,0,0,0.3)]">
+                    <ShieldAlert size={18} className="mr-3" />
+                    {t.errors.details}
+                  </div>
+                </div>
+
+                <div className="mt-8 relative flex-1 flex flex-col overflow-y-auto custom-scrollbar pr-2 min-h-0">
+                  <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-[#ff4655] via-white/20 to-transparent" />
+                  <div className="pl-6 pb-6">
+                    <div className="flex items-center gap-2 mb-4 opacity-30">
+                      <span className="font-mono text-[9px] uppercase tracking-tighter">DATASET ID: {selectedMatch.metadata?.matchid?.slice(0, 8) || 'VAL_X'}</span>
+                      <div className="h-[1px] w-12 bg-white/20"></div>
+                      <span className="font-mono text-[9px] uppercase tracking-tighter">TIMESTAMP: {new Date().toLocaleTimeString()}</span>
+                    </div>
+                    
+                    <div className="font-mono text-[10px] md:text-xs leading-relaxed italic whitespace-pre-wrap text-white/90 uppercase [text-shadow:0_0_1px_rgba(255,255,255,0.2)] markdown-body space-y-3">
+                      <Markdown>{selectedMatch.analysis}</Markdown>
                     </div>
                   </div>
+                </div>
 
-                  <div className="mt-8 relative">
-                    <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-[#ff4655] via-white/20 to-transparent" />
-                    <div className="pl-6">
-                      <div className="flex items-center gap-2 mb-4 opacity-30">
-                        <span className="font-mono text-[9px] uppercase tracking-tighter">DATASET ID: {selectedMatch.metadata?.matchid?.slice(0, 8) || 'VAL_X'}</span>
-                        <div className="h-[1px] w-12 bg-white/20"></div>
-                        <span className="font-mono text-[9px] uppercase tracking-tighter">TIMESTAMP: {new Date().toLocaleTimeString()}</span>
-                      </div>
-                      
-                      <p className="font-mono text-xs md:text-sm leading-relaxed italic whitespace-pre-wrap text-white/90 uppercase [text-shadow:0_0_1px_rgba(255,255,255,0.2)]">
-                        {selectedMatch.analysis}
-                      </p>
-                    </div>
-                  </div>
+                {/* technical footer for aesthetic */}
+                <div className="mt-6 flex justify-end gap-2 pr-2">
+                  <div className="w-1 h-3 bg-red-500 opacity-40"></div>
+                  <div className="w-1 h-3 bg-red-400 opacity-40"></div>
+                  <div className="w-1 h-3 bg-red-600 opacity-40"></div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-                  {/* technical footer for aesthetic */}
-                  <div className="mt-6 flex justify-end gap-2 pr-2">
-                    <div className="w-1 h-3 bg-red-500 opacity-40"></div>
-                    <div className="w-1 h-3 bg-red-400 opacity-40"></div>
-                    <div className="w-1 h-3 bg-red-600 opacity-40"></div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
+        {/* Bottom Section: Chat */}
+        <div className="space-y-10">
             {/* Chat with Analista */}
             <div className="val-border p-8 bg-[#1f2933] text-[#ece8e1] relative flex flex-col h-[500px]">
               <div className="absolute -top-1 left-0 w-full flex justify-center items-center z-20 px-8">
@@ -1025,7 +1206,6 @@ export default function App() {
               </form>
             </div>
           </div>
-        </div>
       </main>
 
       {/* Footer */}
@@ -1041,11 +1221,82 @@ export default function App() {
             </div>
           </div>
           <div className="flex flex-wrap justify-center gap-6 md:gap-10 font-mono text-[9px] md:text-[10px] uppercase tracking-widest opacity-50">
-            <span className="hover:text-[#ff4655] cursor-help border-b border-transparent hover:border-[#ff4655] pb-1 transition-all text-white">{t.footer.guidelines}</span>
-            <span className="hover:text-[#ff4655] cursor-help border-b border-transparent hover:border-[#ff4655] pb-1 transition-all text-white">{t.footer.privacy}</span>
+            <span onClick={() => setModalContent('guidelines')} className="hover:text-[#ff4655] cursor-pointer border-b border-transparent hover:border-[#ff4655] pb-1 transition-all text-white">{t.footer.guidelines}</span>
+            <span onClick={() => setModalContent('privacy')} className="hover:text-[#ff4655] cursor-pointer border-b border-transparent hover:border-[#ff4655] pb-1 transition-all text-white">{t.footer.privacy}</span>
           </div>
         </div>
       </footer>
+
+      {/* Modal */}
+      <AnimatePresence>
+        {modalContent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => setModalContent(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-[#0f1923] border border-[#ff4655]/30 p-8 max-w-md w-full relative shadow-[0_0_50px_rgba(255,70,85,0.15)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => setModalContent(null)}
+                className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"
+              >
+                <Trash2 size={20} />
+              </button>
+              
+              <h2 className="font-display text-2xl uppercase italic text-[#ff4655] mb-6 tracking-tighter">
+                {modalContent === 'guidelines' ? t.footer.guidelines : t.footer.privacy}
+              </h2>
+              
+              <div className="space-y-4 font-mono text-xs text-[#ece8e1]/80 leading-relaxed uppercase tracking-widest">
+                {modalContent === 'guidelines' ? (
+                  language === 'pt' ? (
+                    <>
+                      <p><span className="text-[#ff4655] font-bold">REGRA 1:</span> A culpa NUNCA é do lag, da Riot ou do seu mouse. É da sua mira.</p>
+                      <p><span className="text-[#ff4655] font-bold">REGRA 2:</span> Sobrou 1v5 e seu time morreu antes? Você não é herói, é baiter.</p>
+                      <p><span className="text-[#ff4655] font-bold">REGRA 3:</span> Não chore nos comentários do nosso site. Vá treinar no The Range.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p><span className="text-[#ff4655] font-bold">RULE 1:</span> It is NEVER the lag's fault, Riot's fault, or your mouse's fault. It is your aim.</p>
+                      <p><span className="text-[#ff4655] font-bold">RULE 2:</span> In a 1v5 because your team died? You aren't a hero, you're a baiter.</p>
+                      <p><span className="text-[#ff4655] font-bold">RULE 3:</span> Do not cry in our feedback forms. Go hit the aim trainer.</p>
+                    </>
+                  )
+                ) : (
+                  language === 'pt' ? (
+                    <>
+                      <p><span className="text-[#ff4655] font-bold">SEUS DADOS:</span> Coletamos suas estatísticas horríveis? Sim.</p>
+                      <p><span className="text-[#ff4655] font-bold">NOSSO USO:</span> Vamos usar isso para melhorar seu jogo? Não, vamos usar estritamente para rir da sua cara e treinar IAs mais tóxicas.</p>
+                      <p><span className="text-[#ff4655] font-bold">DIREITOS:</span> Você não tem direitos sobre seus clipes. Porque eles nem valem a pena.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p><span className="text-[#ff4655] font-bold">YOUR DATA:</span> Do we collect your horrible stats? Yes.</p>
+                      <p><span className="text-[#ff4655] font-bold">OUR USAGE:</span> Are we going to use it to help you improve? No, we will strictly use it to laugh at you and train more toxic AIs.</p>
+                      <p><span className="text-[#ff4655] font-bold">RIGHTS:</span> You have no copyright over your clips. Because none of them are worth watching.</p>
+                    </>
+                  )
+                )}
+              </div>
+              
+              <button 
+                onClick={() => setModalContent(null)}
+                className="w-full mt-8 py-3 bg-[#ece8e1] hover:bg-[#ff4655] hover:text-white text-[#0f1923] font-display uppercase tracking-[0.2em] text-sm transition-colors skew-x-[-10deg]"
+              >
+                <span className="block skew-x-[10deg]">{language === 'pt' ? 'Aceitar a Dura Realidade' : 'Accept Harsh Reality'}</span>
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )}
       </AnimatePresence>

@@ -25,8 +25,8 @@ export const translations = {
       loading: "CONFIGURING HUD...",
       footer: "The Analyst uses Valorant's public API to see how sunken you are.",
       errorFormat: "INVALID FORMAT. USE NAME#TAG",
-      errorNotFound: "WARNING: PLAYER NOT FOUND. CHECK IF THE NAME#TAG IS CORRECT. ENTERING GUEST MODE.",
-      errorUnstable: "WARNING: TRACKING SERVICE IS UNSTABLE. YOU HAVE ENTERED AS A GUEST."
+      errorNotFound: "WARNING: PLAYER NOT FOUND. CHECK IF THE NAME#TAG IS CORRECT.",
+      errorUnstable: "WARNING: TRACKING SERVICE IS UNSTABLE. PLEASE TRY AGAIN LATER."
     },
     analysis: {
       header: "PROFILE INSPECTION: IN PROGRESS",
@@ -135,8 +135,8 @@ export const translations = {
       loading: "CONFIGURANDO HUD...",
       footer: "O Analista usa a API pública do Valorant para ver quão afundado você está.",
       errorFormat: "FORMATO INVÁLIDO. USE NOME#TAG",
-      errorNotFound: "AVISO: PLAYER NÃO ENCONTRADO. VERIFIQUE SE O NOME#TAG ESTÁ CORRETO. ENTRANDO EM MODO CONVIDADO.",
-      errorUnstable: "AVISO: O SERVIÇO DE RASTREAMENTO ESTÁ INSTÁVEL. VOCÊ ENTROU COMO CONVIDADO."
+      errorNotFound: "AVISO: PLAYER NÃO ENCONTRADO. VERIFIQUE SE O NOME#TAG ESTÁ CORRETO.",
+      errorUnstable: "AVISO: O SERVIÇO DE RASTREAMENTO ESTÁ INSTÁVEL. TENTE NOVAMENTE MAIS TARDE."
     },
     analysis: {
       header: "INSPEÇÃO DE PERFIL: EM CURSO",
