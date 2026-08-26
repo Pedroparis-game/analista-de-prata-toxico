@@ -198,7 +198,7 @@ export default function App() {
 
     const [name, tag] = riotId.split('#').map(s => s.trim());
 
-    const apiKey = import.meta.env.VITE_HENRIK_API_KEY || import.meta.env.HENRIK_API_KEY;
+    const apiKey = import.meta.env.HENRIK_API_KEY;
     const headers = apiKey ? { Authorization: apiKey } : {};
 
     try {
