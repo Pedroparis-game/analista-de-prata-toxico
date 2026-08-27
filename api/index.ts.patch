@@ -1,0 +1,11 @@
+--- api/index.ts
++++ api/index.ts
+@@ -74,7 +74,7 @@
+     const isInvalidKey = errorStr.includes('API_KEY_INVALID') || errorStr.includes('API key not valid');
+     res.json({
+       ...fallback,
+-      archetype: { ...fallback.archetype, description: isInvalidKey ? "Sua chave de API é inválida." : "Erro na API do Google." }
++      archetype: { ...fallback.archetype, description: "ERRO DETALHADO: " + errorStr }
+     });
+   }
+ });

@@ -88,7 +88,7 @@ app.post('/api/gemini/analyzeProfile', async (req, res) => {
     const isInvalidKey = errorStr.includes('API_KEY_INVALID') || errorStr.includes('API key not valid');
     res.json({
       ...fallback,
-      archetype: { ...fallback.archetype, description: isInvalidKey ? "Sua chave de API é inválida." : "Erro na API do Google." }
+      archetype: { ...fallback.archetype, description: "ERRO VERCEL: " + errorStr }
     });
   }
 });

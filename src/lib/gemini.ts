@@ -1,9 +1,22 @@
+
+const cleanMatchData = (m: any, playerName: string) => {
+  if (!m) return null;
+  const p = m.players?.all_players?.find((x: any) => x.name.toLowerCase() === playerName.toLowerCase());
+  return {
+    metadata: m.metadata,
+    teams: m.teams,
+    players: {
+      all_players: p ? [{ name: p.name, team: p.team, character: p.character, stats: p.stats }] : []
+    }
+  };
+};
+
 export async function generateRoast(userInput: string, playerStats?: any, lang: string = 'en') {
   try {
     const res = await fetch('/api/gemini/generateRoast', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userInput, playerStats, lang })
+      body: JSON.stringify({ userInput, playerStats: playerStats ? { name: playerStats.name, rank: playerStats.rank } : null, lang })
     });
     const data = await res.json();
     return data.text;
@@ -14,23 +27,23 @@ export async function generateRoast(userInput: string, playerStats?: any, lang: 
 }
 
 export async function analyzeProfile(stats: any, lang: string = 'en') {
-  const fallback = {
-    archetype: { title: "SYSTEM ERROR", description: "The analyst is currently offline." },
+  const getFallback = (errMsg = "The analyst is currently offline.") => ({
+    archetype: { title: "SYSTEM ERROR", description: errMsg },
     scoutingReport: { rankLevel: "N/A", mechanical: "TERMINAL FAILURE", mental: "COMATOSE" },
     crushingSummary: "The system tilted. Just like you do every match."
-  };
+  });
   
   try {
     const res = await fetch('/api/gemini/analyzeProfile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stats, lang })
+      body: JSON.stringify({ stats: { ...stats, matches: stats.matches?.slice(0, 5).map((m: any) => cleanMatchData(m, stats.name)) }, lang })
     });
     const data = await res.json();
     return data;
   } catch (err) {
     console.warn("Error calling local gemini proxy:", err);
-    return fallback;
+    return getFallback("ERRO: " + String(err));
   }
 }
 
@@ -39,7 +52,7 @@ export async function analyzeMatch(match: any, playerStats: any, lang: string = 
     const res = await fetch('/api/gemini/analyzeMatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ match, playerStats, lang })
+      body: JSON.stringify({ match: cleanMatchData(match, playerStats.name), playerStats, lang })
     });
     const data = await res.json();
     return data.text;
@@ -54,7 +67,7 @@ export async function chatWithAnalista(history: any[], newMessage: string, stats
     const res = await fetch('/api/gemini/chatWithAnalista', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ history, newMessage, stats, lang })
+      body: JSON.stringify({ history, newMessage, stats: { name: stats.name, tag: stats.tag, rank: stats.rank }, lang })
     });
     const data = await res.json();
     return data.text;
