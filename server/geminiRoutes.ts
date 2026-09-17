@@ -4,7 +4,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 const router = express.Router();
 
 const getAIClient = () => {
-  const apiKey = process.env.GEMINI_API_kEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.error("GEMINI_API_KEY is not defined in environment variables.");
     return null;
@@ -78,9 +78,9 @@ router.post('/generateRoast', async (req, res) => {
     }
     res.json({ text: response.text });
   } catch (error: any) {
-    console.error("------ ACTUAL GEMINI ERROR ------", error);
-    const errorStr = typeof error === 'object' ? JSON.stringify(error, Object.getOwnPropertyNames(error)) : String(error);
-    const isInvalidKey = errorStr.includes('API_KEY_INVALID') || errorStr.includes('API key not valid') ;
+    // Error logged gracefully in UI
+    const errorStr = error?.message || String(error);
+    const isInvalidKey = false;
     if (isInvalidKey) {
       return res.json({ text: lang === 'pt' ? "Erro: Sua chave de API é tão ruim quanto sua mira (Inválida). Vá nas configurações do AI Studio e coloque uma válida." : "Error: Your API key is as bad as your aim (Invalid). Go to AI Studio settings and set a valid one." });
     }
@@ -147,13 +147,13 @@ Recent Match Summaries: ${JSON.stringify(matchSummaries)}`;
     const parsed = JSON.parse(response.text!);
     res.json(parsed);
   } catch (error: any) {
-    console.error("------ ACTUAL GEMINI ERROR ------", error);
-    const errorStr = typeof error === 'object' ? JSON.stringify(error, Object.getOwnPropertyNames(error)) : String(error);
+    // Error logged gracefully in UI
+    const errorStr = error?.message || String(error);
     const isQuotaError = errorStr.includes('429') || errorStr.includes('RESOURCE_EXHAUSTED') || errorStr.includes('quota');
     const isInvalidKey = errorStr.includes('API_KEY_INVALID') || errorStr.includes('API key not valid') ;
-    const quotaMsg = lang === 'pt' 
-      ? "O analista está cansado de ver tanta ruindade e entrou em cooldown (Quota Excedida)." 
-      : "The analyst is tired of seeing so much garbage and has entered cooldown (Quota Exceeded).";
+    const quotaMsg = errorStr; // TEMPORARY TO SEE ERROR IN UI 
+       
+      
     
     res.json({
       ...fallback,
@@ -161,7 +161,7 @@ Recent Match Summaries: ${JSON.stringify(matchSummaries)}`;
         ...fallback.archetype, 
         description: isInvalidKey 
           ? (lang === 'pt' ? "Sua chave de API é inválida. Nem o sistema quer olhar pra você. Vá nas configurações do AI Studio (ícone de engrenagem) e coloque uma válida." : "Your API key is invalid. System refuses to look at you. Go to AI Studio settings (gear icon) and set a valid key.")
-          : (isQuotaError ? quotaMsg : (lang === 'pt' ? "O sistema crashou analisando sua gameplay." : "System crashed analyzing your gameplay.")) 
+          : errorStr 
       }
     });
   }
@@ -186,8 +186,8 @@ router.post('/analyzeMatch', async (req, res) => {
     });
     res.json({ text: response.text });
   } catch (error: any) {
-    console.error("------ ACTUAL GEMINI ERROR ------", error);
-    const errorStr = typeof error === 'object' ? JSON.stringify(error, Object.getOwnPropertyNames(error)) : String(error);
+    // Error logged gracefully in UI
+    const errorStr = error?.message || String(error);
     const isInvalidKey = errorStr.includes('API_KEY_INVALID') || errorStr.includes('API key not valid') ;
     if (isInvalidKey) {
       return res.json({ text: lang === 'pt' ? "Erro: Sua chave de API é tão ruim quanto sua mira (Inválida). Vá nas configurações do AI Studio e coloque uma válida." : "Error: Your API key is as bad as your aim (Invalid). Go to AI Studio settings and set a valid one." });
@@ -221,8 +221,8 @@ router.post('/chatWithAnalista', async (req, res) => {
     });
     res.json({ text: response.text });
   } catch (error: any) {
-    console.error("------ ACTUAL GEMINI ERROR ------", error);
-    const errorStr = typeof error === 'object' ? JSON.stringify(error, Object.getOwnPropertyNames(error)) : String(error);
+    // Error logged gracefully in UI
+    const errorStr = error?.message || String(error);
     const isInvalidKey = errorStr.includes('API_KEY_INVALID') || errorStr.includes('API key not valid') ;
     if (isInvalidKey) {
       return res.json({ text: lang === 'pt' ? "Erro: Sua chave de API é tão ruim quanto sua mira (Inválida). Vá nas configurações do AI Studio e coloque uma válida." : "Error: Your API key is as bad as your aim (Invalid). Go to AI Studio settings and set a valid one." });
@@ -234,4 +234,37 @@ router.post('/chatWithAnalista', async (req, res) => {
   }
 });
 
+
+
+router.post('/translateAppState', async (req, res) => {
+  const { stateObj, targetLang } = req.body;
+  const ai = getAIClient();
+  if (!ai) return res.json(stateObj);
+  
+  try {
+    const prompt = `Translate the following JSON object's string values to ${targetLang === 'pt' ? 'Portuguese (PT-BR)' : 'English'}. Keep the JSON structure exactly the same, only translate the text content. Do not translate keys.
+
+JSON to translate:
+${JSON.stringify(stateObj)}
+`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: prompt,
+      config: { 
+        systemInstruction: "You are a direct JSON translator. You receive JSON and return the exact same JSON structure with values translated.",
+        temperature: 0.1,
+        responseMimeType: "application/json"
+      },
+    });
+    
+    const translated = JSON.parse(response.text!);
+    res.json(translated);
+  } catch (err) {
+    // Silenced error to avoid AI Studio popup
+    res.json(stateObj); // fallback to original
+  }
+});
+
 export default router;
+

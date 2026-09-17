@@ -78,6 +78,16 @@ export async function chatWithAnalista(history: any[], newMessage: string, stats
 }
 
 export async function translateAppState(stateObj: any, targetLang: string) {
-  // Not used right now but keeps signature
-  return stateObj;
+  try {
+    const res = await fetch('/api/gemini/translateAppState', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stateObj, targetLang })
+    });
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.warn("Error calling translation:", err);
+    return stateObj;
+  }
 }

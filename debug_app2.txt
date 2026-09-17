@@ -14,10 +14,10 @@ import Markdown from 'react-markdown';
 
 import { MatchDetailsPanel } from './components/MatchDetailsPanel';
 import { MatchHistoryPanel } from './components/MatchHistoryPanel';
-import { ScanningAnalysisScreen } from './components/ScanningAnalysisScreen';
 import { ProfileAnalysisCard } from './components/ProfileAnalysisCard';
 import { RoastCard } from './components/RoastCard';
 import { ChatPanel } from './components/ChatPanel';
+import { ScanningAnalysisScreen } from './components/ScanningAnalysisScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { LandingPage } from './components/LandingPage';
 import { PlayerStats, ChatMessage, ProfileAnalysisResult } from './types';
@@ -300,6 +300,115 @@ export default function App() {
           setShowAnalysisScreen={setShowAnalysisScreen}
           t={t}
         />
+                    <p className="font-mono text-xs uppercase tracking-widest opacity-30 animate-pulse">{t.analysis.compiling}</p>
+                  </div>
+                ) : profileAnalysis ? (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="space-y-6"
+                  >
+                    {/* Archetype Header */}
+                    <div className="border-l-4 border-[#ff4655] pl-4 py-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Zap size={14} className="text-[#ff4655]" />
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-[#ff4655] font-bold">{t.analysis.labels.archetype}</span>
+                      </div>
+                      <h4 className="font-display text-2xl italic uppercase text-white">{profileAnalysis.archetype.title}</h4>
+                      <p className="font-mono text-[11px] opacity-60 uppercase">{profileAnalysis.archetype.description}</p>
+                    </div>
+
+                    {/* Scouting Report Grid */}
+                    <div className="grid gap-4">
+                      <div className="bg-white/5 p-4 val-border border-white/5">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Brain size={16} className="text-[#00b2a9]" />
+                          <span className="font-mono text-[10px] uppercase font-bold text-[#00b2a9]">{t.analysis.labels.strategic}</span>
+                        </div>
+                        <p className="font-mono text-xs leading-relaxed italic opacity-80 uppercase">{profileAnalysis.scoutingReport.rankLevel}</p>
+                      </div>
+
+                      <div className="bg-white/5 p-4 val-border border-white/5">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Target size={16} className="text-[#ff4655]" />
+                          <span className="font-mono text-[10px] uppercase font-bold text-[#ff4655]">{t.analysis.labels.mechanical}</span>
+                        </div>
+                        <p className="font-mono text-xs leading-relaxed italic opacity-80 uppercase">{profileAnalysis.scoutingReport.mechanical}</p>
+                      </div>
+
+                      <div className="bg-white/5 p-4 val-border border-white/5">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertTriangle size={16} className="text-yellow-500" />
+                          <span className="font-mono text-[10px] uppercase font-bold text-yellow-500">{t.analysis.labels.stability}</span>
+                        </div>
+                        <p className="font-mono text-xs leading-relaxed italic opacity-80 uppercase">{profileAnalysis.scoutingReport.mental}</p>
+                      </div>
+                    </div>
+
+                    {/* tactical separator */}
+                    <div className="py-2 flex items-center justify-between opacity-30">
+                      <div className="h-[1px] flex-1 bg-white/20"></div>
+                      <span className="mx-4 font-mono text-[8px] tracking-[0.4em]">VERDICT PROTOCOL V3.1</span>
+                      <div className="h-[1px] flex-1 bg-white/20"></div>
+                    </div>
+
+                    {/* Final Verdict */}
+                    <div className="relative group">
+                      <div className="absolute -top-3 -left-2 bg-[#ff4655] text-white text-[8px] font-bold px-2 py-0.5 uppercase tracking-tighter skew-x-[-15deg] z-20">
+                        {t.analysis.labels.finalVerdict}
+                      </div>
+                      <div className="val-border bg-[#1f2933] border-[#ff4655]/40 p-5 relative overflow-hidden">
+                        {/* Technical grid background */}
+                        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '10px 10px' }} />
+                        
+                        <p className="font-mono text-sm leading-relaxed text-[#ece8e1] whitespace-pre-wrap italic uppercase relative z-10">
+                          {profileAnalysis.crushingSummary}
+                        </p>
+                        
+                        {/* Decorative corner */}
+                        <div className="absolute bottom-0 right-0 w-8 h-8 pointer-events-none">
+                          <div className="absolute bottom-0 right-0 w-[2px] h-4 bg-[#ff4655]"></div>
+                          <div className="absolute bottom-0 right-0 h-[2px] w-4 bg-[#ff4655]"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <div className="text-center p-8 opacity-20 font-mono italic">
+                    {t.analysis.empty}
+                  </div>
+                )}
+              </div>
+
+              {/* Progress Bar & Actions */}
+              <div className="mt-8 space-y-6">
+                <div className="w-full h-1.5 bg-black/50 overflow-hidden val-border !border-[#ece8e1]/10">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${analysisProgress}%` }}
+                    className="h-full bg-[#ff4655] shadow-[0_0_10px_#ff4655]"
+                  />
+                </div>
+
+                <div className="flex flex-col md:flex-row gap-4">
+                  <button 
+                    onClick={() => setShowAnalysisScreen(false)}
+                    className="val-btn flex-1 text-xl val-btn-primary"
+                  >
+                    {t.analysis.accessButton}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Decorative elements */}
+        <div className="absolute top-1/2 left-4 -translate-y-1/2 hidden lg:flex flex-col gap-8 opacity-20">
+          <div className="writing-vertical-rl font-mono text-[10px] uppercase tracking-[0.5em]">{t.analysis.protocol}</div>
+          <div className="w-[1px] h-32 bg-[#ece8e1]" />
+        </div>
+      </motion.div>
       ) : (
         <motion.div
           key="dashboard"
@@ -350,7 +459,7 @@ export default function App() {
         <div className="flex items-center gap-3 md:gap-6 px-4 md:px-8 h-full bg-[#ff4655] text-white skew-x-[-12deg] -mr-4 ml-auto z-50">
           <div className="flex items-center gap-2 md:gap-4 skew-x-[12deg]">
             {player.card && (
-              <img src={player.card || "https://picsum.photos/seed/val/400/400"} className="w-8 h-8 md:w-10 md:h-10 border-2 border-white/20" alt="Card" referrerPolicy="no-referrer" />
+              <img src={player.card} className="w-8 h-8 md:w-10 md:h-10 border-2 border-white/20" alt="Card" referrerPolicy="no-referrer" />
             )}
             <div className="flex flex-col leading-tight max-w-[80px] md:max-w-none">
               <span className="font-display text-base md:text-xl uppercase tracking-tighter truncate">
@@ -450,8 +559,9 @@ export default function App() {
 
             {/* Profile Analysis */}
             <ProfileAnalysisCard analyzing={analyzing} profileAnalysis={profileAnalysis} t={t} />
+
             <RoastCard loading={loading} lastRoast={lastRoast} triggerShake={triggerShake} setLastRoast={setLastRoast} setInput={setInput} t={t} />
-          </div>
+        </div>
 
           {/* Right Column: Match History */}
                     <MatchHistoryPanel
@@ -476,12 +586,38 @@ export default function App() {
         </AnimatePresence>
 
         {/* Bottom Section: Chat */}
-        <div className="space-y-10">
-            <ChatPanel chatMessages={chatMessages} chatInput={chatInput} setChatInput={setChatInput} handleChatSubmit={handleChatSubmit} analyzing={analyzing} t={t} />
-        </div>
+        <ChatPanel chatMessages={chatMessages} chatInput={chatInput} setChatInput={setChatInput} handleChatSubmit={handleChatSubmit} analyzing={analyzing} t={t} />
+                  </div>
+                ))}
+                {analyzing && (
+                  <div className="flex justify-start">
+                    <div className="p-3 bg-[#ff4655] text-white animate-pulse font-bold">
+                      ...
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <form onSubmit={handleChatSubmit} className="flex gap-4">
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder={t.dashboard.commsPlaceholder}
+                  className="flex-1 p-4 bg-[#0f1923] border-b border-white/20 font-mono text-xs focus:outline-none focus:border-[#ff4655] transition-colors uppercase"
+                />
+                <button
+                  type="submit"
+                  disabled={analyzing}
+                  className="bg-[#ff4655] text-white px-6 transition-all hover:bg-white hover:text-[#ff4655] active:scale-95 border-2 border-transparent"
+                >
+                  <Send size={20} />
+                </button>
+              </form>
+            </div>
+          </div>
       </main>
 
-        {/* Footer */}
+      {/* Footer */}
       <footer className="p-8 md:p-12 border-t border-[#ece8e1]/5 mt-12 bg-[#0a0a0a]">
         <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-8 md:gap-12">
           <div className="flex items-center gap-4 md:gap-6">

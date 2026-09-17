@@ -16,18 +16,12 @@
 /* Valorant Border Pattern */
 .val-border {
   @apply relative border border-[#ece8e1]/20;
-  clip-path: polygon(
-    0% 0%, 
-    100% 0%, 
-    100% calc(100% - 15px), 
-    calc(100% - 15px) 100%, 
-    0% 100%
-  );
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
 }
 
 .val-btn {
   @apply relative px-8 py-4 font-display text-xl uppercase tracking-[0.1em] transition-all overflow-hidden inline-flex items-center justify-center;
-  clip-path: polygon(10% 0%, 100% 0%, 90% 100%, 0% 100%);
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
 }
 
 .val-btn-primary {
@@ -49,7 +43,8 @@
 }
 
 .val-header {
-  @apply bg-[#ff4655] text-[#0f1923] py-2 px-8 font-display text-base uppercase tracking-wider font-bold transform -skew-x-12 shadow-[4px_4px_0_rgba(255,70,85,0.2)] border-l-4 border-[#0f1923] leading-none flex items-center justify-center;
+  @apply bg-[#ff4655] text-[#0f1923] py-2 px-8 font-display text-base md:text-lg uppercase tracking-wider font-bold shadow-[4px_4px_0_rgba(255,70,85,0.2)] border-l-4 border-[#0f1923] leading-none flex items-center justify-center;
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
 }
 
 /* Subtle background movement */
@@ -63,7 +58,7 @@
 
 @keyframes bg-move {
   0% { background-position: 0 0; }
-  100% { background-position: 100px 100px; }
+  100% { background-position: 96px 96px; }
 }
 
 .floating-mote {
@@ -188,3 +183,13 @@
   cursor: crosshair;
 }
 .markdown-body p { margin-bottom: 0.75rem; } .markdown-body strong { font-weight: 700; color: inherit; }
+
+.val-card {
+  @apply bg-[#1f2933] border border-[#ece8e1]/20 p-6 md:p-8 flex flex-col relative;
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+}
+
+.val-card-header {
+  @apply font-display text-2xl md:text-3xl uppercase tracking-widest text-[#ff4655] mb-6 flex items-center gap-3 border-b border-[#ece8e1]/10 pb-4;
+}
+

@@ -1,10 +1,18 @@
-import { GoogleGenAI, Type } from "@google/genai";
-import dotenv from "dotenv";
-dotenv.config();
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-async function run() {
-    try {
-        const responseSchema = {
+require('dotenv').config();
+const { GoogleGenAI, Type } = require('@google/genai');
+
+async function test() {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  try {
+    const prompt = 'Analyze my Valorant profile: Name: Feijao#11128 Rank: Platinum 1 Recent Match Summaries: []';
+    const response = await ai.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: prompt,
+      config: { 
+        systemInstruction: "You are a toxic analyst.",
+        temperature: 0.9,
+        responseMimeType: "application/json",
+        responseSchema: {
           type: Type.OBJECT,
           properties: {
             archetype: {
@@ -27,18 +35,12 @@ async function run() {
             crushingSummary: { type: Type.STRING }
           },
           required: ["archetype", "scoutingReport", "crushingSummary"]
-        };
-        const res = await ai.models.generateContent({
-            model: "gemini-3.1-flash-lite",
-            contents: "Hello",
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: responseSchema
-            }
-        });
-        console.log("Success:", res.text);
-    } catch(err) {
-        console.error("Stringified error:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
-    }
+        }
+      },
+    });
+    console.log("SUCCESS");
+  } catch (err) {
+    console.error("ERROR:", err.message);
+  }
 }
-run();
+test();

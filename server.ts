@@ -1,17 +1,10 @@
 
-import fs from 'fs';
-import util from 'util';
-const logFile = fs.createWriteStream('server-debug.log', { flags: 'a' });
-const originalError = console.error;
-console.error = function (...args) {
-  logFile.write(util.format.apply(null, args) + '\n');
-  originalError.apply(console, args);
-};
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import dotenv from "dotenv";
 import geminiRoutes from "./server/geminiRoutes";
+import henrikRoutes from "./server/henrikRoutes";
 
 dotenv.config();
 
@@ -28,6 +21,7 @@ async function startServer() {
   });
   
   app.use("/api/gemini", geminiRoutes);
+  app.use("/api/henrik", henrikRoutes);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
